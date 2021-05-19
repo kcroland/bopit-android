@@ -19,16 +19,29 @@ private const val ARG_PARAM2 = "param2"
  * create an instance of this fragment.
  */
 class GameOver : Fragment() {
+
+    companion object {
+        const val FINAL_SCORE = "finalScore"
+    }
+
     private var _binding: FragmentGameOverBinding? = null
 
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+
+//        arguments?.let {
+//            binding.scoreText.text = it.getString(FINAL_SCORE).toString()
+//        }
 
         _binding = FragmentGameOverBinding.inflate(inflater, container, false)
         return binding.root

@@ -58,14 +58,6 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        binding.buttonSecond.setOnClickListener {
-            findNavController().navigate(R.id.action_SecondFragment_to_FirstFragment)
-        }
-    }
-
     override fun onStart() {
         super.onStart()
 
@@ -91,6 +83,7 @@ class SecondFragment : Fragment(), SensorEventListener {
     private fun startGame() {
         binding.countdownText.visibility = View.INVISIBLE
         getNextGesture()
+        if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
         binding.gestureText.visibility = View.VISIBLE
         binding.gestureImage.visibility = View.VISIBLE
         startGestureSensor()
@@ -124,9 +117,7 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            if (initialTimeStamp == 0.0) {
-                initialTimeStamp = event.timestamp.toDouble()
-            }
+            if (initialTimeStamp == 0.0) initialTimeStamp = event.timestamp.toDouble()
 
             val elapsedTime = event.timestamp.toDouble() / SECOND_IN_NANO -
                     initialTimeStamp.toDouble() / SECOND_IN_NANO
@@ -151,9 +142,7 @@ class SecondFragment : Fragment(), SensorEventListener {
 //            binding.gestureText.text = "upDown = ${upDown.toInt()}\n leftRight ${sides.toInt()}\n z: ${event.values[2].toInt()}"
 //            binding.gestureText.textSize = 24.0F
 
-            if (abs(sides) > 5 && abs(upDown) > 5) {
-              noMovement = false
-            }
+            if (abs(sides) > 5 && abs(upDown) > 5) noMovement = false
 
             val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
             val wasBopped = currentGesture == BOP && upDown < -10
@@ -177,7 +166,7 @@ class SecondFragment : Fragment(), SensorEventListener {
 
             override fun onFinish() {
                 initialTimeStamp = 0.0
-                binding.gestureText.setTextColor(Color.parseColor("#FFFFFF"))
+                binding.gestureText.setTextColor(Color.parseColor("#FCFF64"))
                 getNextGesture()
                 startGestureSensor()
             }
@@ -186,6 +175,9 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun gameOver() {
         findNavController().navigate(R.id.action_SecondFragment_to_gameOver)
+//        val action = SecondFragmentDirections.actionSecondFragmentToGameOver()
+//        // Navigate using that action
+//        findNavController().navigate(action)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

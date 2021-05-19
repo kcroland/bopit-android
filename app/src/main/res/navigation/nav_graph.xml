@@ -22,9 +22,6 @@
         tools:layout="@layout/fragment_second">
 
         <action
-            android:id="@+id/action_SecondFragment_to_FirstFragment"
-            app:destination="@id/FirstFragment" />
-        <action
             android:id="@+id/action_SecondFragment_to_gameOver"
             app:destination="@id/gameOver" />
     </fragment>
@@ -34,7 +31,7 @@
         android:label="fragment_game_over"
         tools:layout="@layout/fragment_game_over" >
         <argument
-            android:name="score"
+            android:name="finalScore"
             app:argType="integer"
             android:defaultValue="0" />
         <action
