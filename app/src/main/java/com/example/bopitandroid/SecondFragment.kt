@@ -43,11 +43,12 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
 
-    private var noMovement = true
     private var score: Int = 0
     private var initialTimeStamp: Double = 0.0
     private  var currentGesture: String = ""
+
     private var hideEventCalled = false
+    private var noMovement = true
 
     private var _binding: FragmentSecondBinding? = null
 
@@ -94,26 +95,24 @@ class SecondFragment : Fragment(), SensorEventListener {
     }
 
     private fun startGestureSensor() {
-        val sensorType = when (currentGesture == HIDE) {
-            true -> Sensor.TYPE_PROXIMITY
-            false -> Sensor.TYPE_ACCELEROMETER
+        val sensorType = when (currentGesture) {
+            HIDE -> Sensor.TYPE_PROXIMITY
+            else -> Sensor.TYPE_ACCELEROMETER
         }
 
-        sensorManager = activity?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager.getDefaultSensor(sensorType)?.also {
-            sensorManager.registerListener(
-                this,
-                it,
-                SensorManager.SENSOR_DELAY_FASTEST,
-                SensorManager.SENSOR_DELAY_FASTEST)
+        if (sensorType != Sensor.TYPE_SIGNIFICANT_MOTION) {
+            sensorManager = activity?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            sensorManager.getDefaultSensor(sensorType)?.also {
+                sensorManager.registerListener(
+                    this,
+                    it,
+                    SensorManager.SENSOR_DELAY_FASTEST,
+                    SensorManager.SENSOR_DELAY_FASTEST
+                )
+            }
         }
 
         if (sensorType == Sensor.TYPE_PROXIMITY) {
-//            GlobalScope.launch(Dispatchers.Main) {
-//                Timer("Hide  Event", false).schedule(3000) {
-//                    if (!hideEventCalled) gameOver()
-//                }
-//            }
             GlobalScope.launch(Dispatchers.Main) {
                 delay(3000)
                 if (!hideEventCalled) gameOver()
@@ -127,10 +126,12 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun getNextGesture() {
         var newGesture = GESTURES_IMAGES.keys.random()
-        while (newGesture == currentGesture || newGesture == PULL) { // TODO: 5/19/2021 Remove PULL check after testing
+        while (newGesture == currentGesture) {
             newGesture = GESTURES_IMAGES.keys.random()
         }
+        newGesture = PULL
         currentGesture = newGesture
+        // TODO: 5/19/2021 return to newGesture
 
         binding.gestureText.text = newGesture
         if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
@@ -142,16 +143,13 @@ class SecondFragment : Fragment(), SensorEventListener {
 
         if (initialTimeStamp == 0.0) initialTimeStamp = event.timestamp.toDouble()
         val elapsedTime = event.timestamp.toDouble() / SECOND_IN_NANO -
-                initialTimeStamp.toDouble() / SECOND_IN_NANO
+                initialTimeStamp / SECOND_IN_NANO
 
         if (event.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             checkAccelerometerGesture(event, elapsedTime)
         } else {
             checkProximityGesture(event)
         }
-
-//            binding.gestureText.text = "upDown = ${upDown.toInt()}\n leftRight ${sides.toInt()}\n z: ${event.values[2].toInt()}"
-//            binding.gestureText.textSize = 24.0F
     }
 
     private fun checkProximityGesture(event: SensorEvent) {
@@ -175,16 +173,17 @@ class SecondFragment : Fragment(), SensorEventListener {
             rotationY = sides * 3f
             rotation = -sides
             translationX = sides * -10
-            translationY = upDown *10
+            translationY = upDown * 10
         }
 
         if (abs(sides) > 5 && abs(upDown) > 5) { noMovement = false }
 
+        val wasPulled = currentGesture == PULL && upDown > 10
         val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
         val wasBopped = currentGesture == BOP && upDown < -10
         val wasFroze = currentGesture == FREEZE && elapsedTime > 3 && noMovement
 
-        if (wasTwisted || wasBopped || wasFroze) onSuccessfulGesture()
+        if (wasPulled || wasTwisted || wasBopped || wasFroze) onSuccessfulGesture()
     }
 
     private fun onSuccessfulGesture() {
