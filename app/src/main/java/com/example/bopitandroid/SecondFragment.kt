@@ -157,7 +157,7 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun onSuccessfulGesture() {
         noMovement = true
-        score = score++
+        score += 1
         binding.gestureText.setTextColor(Color.parseColor("#59FF74"))
         object : CountDownTimer(2000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
@@ -174,10 +174,8 @@ class SecondFragment : Fragment(), SensorEventListener {
     }
 
     private fun gameOver() {
-        findNavController().navigate(R.id.action_SecondFragment_to_gameOver)
-//        val action = SecondFragmentDirections.actionSecondFragmentToGameOver()
-//        // Navigate using that action
-//        findNavController().navigate(action)
+        val action = SecondFragmentDirections.actionSecondFragmentToGameOver(score)
+        findNavController().navigate(action)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

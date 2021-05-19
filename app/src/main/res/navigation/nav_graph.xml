@@ -23,7 +23,11 @@
 
         <action
             android:id="@+id/action_SecondFragment_to_gameOver"
-            app:destination="@id/gameOver" />
+            app:destination="@id/gameOver" >
+            <argument
+                android:name="finalScore"
+                app:argType="integer" />
+        </action>
     </fragment>
     <fragment
         android:id="@+id/gameOver"

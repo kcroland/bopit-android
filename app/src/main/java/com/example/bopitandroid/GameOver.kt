@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import com.example.bopitandroid.databinding.FragmentGameOverBinding
 
 // TODO: Rename parameter arguments, choose names that match
@@ -39,10 +40,6 @@ class GameOver : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
 
-//        arguments?.let {
-//            binding.scoreText.text = it.getString(FINAL_SCORE).toString()
-//        }
-
         _binding = FragmentGameOverBinding.inflate(inflater, container, false)
         return binding.root
 
@@ -50,6 +47,12 @@ class GameOver : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        val args: GameOverArgs by navArgs()
+        binding.scoreText.text = args.finalScore.toString()
+//        arguments?.let {
+//            binding.scoreText.text = it.getString(FINAL_SCORE).toString()
+//        }
 
         binding.playAgainButton.setOnClickListener {
             findNavController().navigate(R.id.action_gameOver_to_SecondFragment)
