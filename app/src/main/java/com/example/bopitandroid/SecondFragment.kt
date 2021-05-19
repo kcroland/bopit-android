@@ -14,6 +14,10 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.bopitandroid.databinding.FragmentSecondBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 const val SECOND_IN_NANO = 1000000000
@@ -22,12 +26,14 @@ const val BOP = "bop it!"
 const val TWIST = "twist it!"
 const val PULL = "pull it!"
 const val FREEZE = "FREEZE!"
+const val HIDE = "hide it!"
 
 val GESTURES_IMAGES: Map<String, Int> = mapOf(
     BOP to R.drawable.bop_arrow,
     TWIST to R.drawable.twist_arrow,
     PULL to R.drawable.pull_arrow,
-    FREEZE to R.drawable.freeze
+    FREEZE to R.drawable.freeze,
+    HIDE to R.drawable.hide_it_icon,
 )
 
 /**
@@ -41,6 +47,7 @@ class SecondFragment : Fragment(), SensorEventListener {
     private var score: Int = 0
     private var initialTimeStamp: Double = 0.0
     private  var currentGesture: String = ""
+    private var hideEventCalled = false
 
     private var _binding: FragmentSecondBinding? = null
 
@@ -67,8 +74,6 @@ class SecondFragment : Fragment(), SensorEventListener {
             }
 
             override fun onFinish() {
-                binding.countdownText.text = "Go!"
-
                 startGame()
             }
         }.start()
@@ -83,20 +88,36 @@ class SecondFragment : Fragment(), SensorEventListener {
     private fun startGame() {
         binding.countdownText.visibility = View.INVISIBLE
         getNextGesture()
-        if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
         binding.gestureText.visibility = View.VISIBLE
         binding.gestureImage.visibility = View.VISIBLE
         startGestureSensor()
     }
 
     private fun startGestureSensor() {
+        val sensorType = when (currentGesture == HIDE) {
+            true -> Sensor.TYPE_PROXIMITY
+            false -> Sensor.TYPE_ACCELEROMETER
+        }
+
         sensorManager = activity?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
+        sensorManager.getDefaultSensor(sensorType)?.also {
             sensorManager.registerListener(
                 this,
                 it,
                 SensorManager.SENSOR_DELAY_FASTEST,
                 SensorManager.SENSOR_DELAY_FASTEST)
+        }
+
+        if (sensorType == Sensor.TYPE_PROXIMITY) {
+//            GlobalScope.launch(Dispatchers.Main) {
+//                Timer("Hide  Event", false).schedule(3000) {
+//                    if (!hideEventCalled) gameOver()
+//                }
+//            }
+            GlobalScope.launch(Dispatchers.Main) {
+                delay(3000)
+                if (!hideEventCalled) gameOver()
+            }
         }
     }
 
@@ -106,59 +127,81 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun getNextGesture() {
         var newGesture = GESTURES_IMAGES.keys.random()
-        while (newGesture == currentGesture) {
+        while (newGesture == currentGesture || newGesture == PULL) { // TODO: 5/19/2021 Remove PULL check after testing
             newGesture = GESTURES_IMAGES.keys.random()
         }
         currentGesture = newGesture
 
         binding.gestureText.text = newGesture
+        if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
         binding.gestureImage.setImageResource(GESTURES_IMAGES[newGesture]!!)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            if (initialTimeStamp == 0.0) initialTimeStamp = event.timestamp.toDouble()
+        if (event == null) return
 
-            val elapsedTime = event.timestamp.toDouble() / SECOND_IN_NANO -
-                    initialTimeStamp.toDouble() / SECOND_IN_NANO
+        if (initialTimeStamp == 0.0) initialTimeStamp = event.timestamp.toDouble()
+        val elapsedTime = event.timestamp.toDouble() / SECOND_IN_NANO -
+                initialTimeStamp.toDouble() / SECOND_IN_NANO
 
-            if (elapsedTime > 3 && (currentGesture != FREEZE) || (currentGesture == FREEZE && !noMovement)) {
-                binding.gestureText.setTextColor(Color.parseColor("#EB3743"))
-                stopGestureSensor()
-                gameOver()
-            }
-
-            val sides = event.values[0]
-            val upDown = event.values[1]
-
-            binding.gestureImage.apply {
-                rotationX = upDown * 3f
-                rotationY = sides * 3f
-                rotation = -sides
-                translationX = sides * -10
-                translationY = upDown *10
-            }
+        if (event.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            checkAccelerometerGesture(event, elapsedTime)
+        } else {
+            checkProximityGesture(event)
+        }
 
 //            binding.gestureText.text = "upDown = ${upDown.toInt()}\n leftRight ${sides.toInt()}\n z: ${event.values[2].toInt()}"
 //            binding.gestureText.textSize = 24.0F
+    }
 
-            if (abs(sides) > 5 && abs(upDown) > 5) noMovement = false
-
-            val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
-            val wasBopped = currentGesture == BOP && upDown < -10
-            val wasFroze = currentGesture == FREEZE && elapsedTime > 3 && noMovement
-
-            if (wasTwisted || wasBopped || wasFroze) {
-                stopGestureSensor()
-                onSuccessfulGesture()
-            }
+    private fun checkProximityGesture(event: SensorEvent) {
+        val isHidden = event.values[0] < 3
+        if (isHidden) {
+            hideEventCalled = true
+            onSuccessfulGesture()
         }
     }
 
+    private fun checkAccelerometerGesture(event: SensorEvent, elapsedTime: Double) {
+        if (elapsedTime > 3 && (currentGesture != FREEZE) || (currentGesture == FREEZE && !noMovement)) {
+            gameOver()
+        }
+
+        val sides: Float = event.values[0]
+        val upDown: Float = event.values[1]
+
+        binding.gestureImage.apply {
+            rotationX = upDown * 3f
+            rotationY = sides * 3f
+            rotation = -sides
+            translationX = sides * -10
+            translationY = upDown *10
+        }
+
+        if (abs(sides) > 5 && abs(upDown) > 5) { noMovement = false }
+
+        val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
+        val wasBopped = currentGesture == BOP && upDown < -10
+        val wasFroze = currentGesture == FREEZE && elapsedTime > 3 && noMovement
+
+        if (wasTwisted || wasBopped || wasFroze) onSuccessfulGesture()
+    }
+
     private fun onSuccessfulGesture() {
+        stopGestureSensor()
+
+        // Reset visuals and update score
+        binding.gestureImage.apply {
+            rotationX = 0.0F
+            rotationY = 0.0F
+            rotation = 0.0F
+            translationX = 0.0F
+            translationY = 0.0F
+        }
         noMovement = true
-        score += 1
         binding.gestureText.setTextColor(Color.parseColor("#59FF74"))
+        score += 1
+
         object : CountDownTimer(2000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 return
@@ -174,8 +217,18 @@ class SecondFragment : Fragment(), SensorEventListener {
     }
 
     private fun gameOver() {
-        val action = SecondFragmentDirections.actionSecondFragmentToGameOver(score)
-        findNavController().navigate(action)
+        binding.gestureText.setTextColor(Color.parseColor("#EB3743"))
+        stopGestureSensor()
+        object : CountDownTimer(1000, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                return
+            }
+
+            override fun onFinish() {
+                val action = SecondFragmentDirections.actionSecondFragmentToGameOver(score)
+                findNavController().navigate(action)
+            }
+        }.start()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
