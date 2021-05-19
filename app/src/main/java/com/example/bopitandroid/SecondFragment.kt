@@ -11,7 +11,6 @@ import android.os.CountDownTimer
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.bopitandroid.databinding.FragmentSecondBinding
@@ -186,8 +185,7 @@ class SecondFragment : Fragment(), SensorEventListener {
     }
 
     private fun gameOver() {
-        Toast.makeText(context, "Game Over!", Toast.LENGTH_SHORT).show()
-        // navigate to gameover screen and report score
+        findNavController().navigate(R.id.action_SecondFragment_to_gameOver)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
