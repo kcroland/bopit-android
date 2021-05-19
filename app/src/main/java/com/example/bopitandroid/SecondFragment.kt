@@ -1,6 +1,7 @@
 package com.example.bopitandroid
 
 import android.content.Context
+import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -14,6 +15,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.bopitandroid.databinding.FragmentSecondBinding
+import kotlin.math.abs
 
 const val SECOND_IN_NANO = 1000000000
 
@@ -36,9 +38,10 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
 
+    private var noMovement = true
     private var score: Int = 0
     private var initialTimeStamp: Double = 0.0
-    private  var currentGesture: String = GESTURES_IMAGES.keys.random()
+    private  var currentGesture: String = ""
 
     private var _binding: FragmentSecondBinding? = null
 
@@ -110,8 +113,8 @@ class SecondFragment : Fragment(), SensorEventListener {
     }
 
     private fun getNextGesture() {
-        var newGesture = ""
-        while (newGesture != currentGesture || newGesture == "") {
+        var newGesture = GESTURES_IMAGES.keys.random()
+        while (newGesture == currentGesture) {
             newGesture = GESTURES_IMAGES.keys.random()
         }
         currentGesture = newGesture
@@ -122,10 +125,15 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-
             if (initialTimeStamp == 0.0) {
                 initialTimeStamp = event.timestamp.toDouble()
-            } else if ((event.timestamp.toDouble() / SECOND_IN_NANO - initialTimeStamp.toDouble() / SECOND_IN_NANO) > 3) {
+            }
+
+            val elapsedTime = event.timestamp.toDouble() / SECOND_IN_NANO -
+                    initialTimeStamp.toDouble() / SECOND_IN_NANO
+
+            if (elapsedTime > 3 && (currentGesture != FREEZE) || (currentGesture == FREEZE && !noMovement)) {
+                binding.gestureText.setTextColor(Color.parseColor("#EB3743"))
                 stopGestureSensor()
                 gameOver()
             }
@@ -141,41 +149,48 @@ class SecondFragment : Fragment(), SensorEventListener {
                 translationY = upDown *10
             }
 
-            binding.gestureText.text = "upDown = ${upDown.toInt()}\n leftRight ${sides.toInt()}\n z: ${event.values[2].toInt()}"
-            binding.gestureText.textSize = 24.0F
+//            binding.gestureText.text = "upDown = ${upDown.toInt()}\n leftRight ${sides.toInt()}\n z: ${event.values[2].toInt()}"
+//            binding.gestureText.textSize = 24.0F
 
-            if (sides > 10 || sides < -10) {
-                Toast.makeText(context, "Twisted it!", Toast.LENGTH_SHORT).show()
-                binding.gestureText.text = event.timestamp.toString()
+            if (abs(sides) > 5 && abs(upDown) > 5) {
+              noMovement = false
+            }
+
+            val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
+            val wasBopped = currentGesture == BOP && upDown < -10
+            val wasFroze = currentGesture == FREEZE && elapsedTime > 3 && noMovement
+
+            if (wasTwisted || wasBopped || wasFroze) {
                 stopGestureSensor()
                 onSuccessfulGesture()
-            }
-            if (upDown < -10) {
-                Toast.makeText(context, "Bopped it!", Toast.LENGTH_SHORT).show()
-                stopGestureSensor()
             }
         }
     }
 
     private fun onSuccessfulGesture() {
-        TODO("Not yet implemented")
+        noMovement = true
+        score = score++
+        binding.gestureText.setTextColor(Color.parseColor("#59FF74"))
+        object : CountDownTimer(2000, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                return
+            }
+
+            override fun onFinish() {
+                initialTimeStamp = 0.0
+                binding.gestureText.setTextColor(Color.parseColor("#FFFFFF"))
+                getNextGesture()
+                startGestureSensor()
+            }
+        }.start()
     }
 
     private fun gameOver() {
         Toast.makeText(context, "Game Over!", Toast.LENGTH_SHORT).show()
+        // navigate to gameover screen and report score
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         return
     }
-
-//    class EndlessTimer {
-//        companion object {
-//            const val SECOND = 1000
-//        }
-//
-//        fun start() {
-//
-//        }
-//    }
 }
