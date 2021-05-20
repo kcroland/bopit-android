@@ -30,6 +30,7 @@ Don't move for a few seconds!
 ## **TRIVIA!**
 Every 5 gesture, a general knowledge true/false trivia question
 will appear. Just answer the question correctly to move on!
+
 ---
 
 ## Planned Features
