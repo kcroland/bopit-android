@@ -18,17 +18,15 @@ import com.example.bopitandroid.databinding.FragmentSecondBinding
 import com.example.bopitandroid.network.MyTrivia
 import com.example.bopitandroid.network.ServiceBuilder
 import com.example.bopitandroid.network.TriviaService
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import kotlin.math.abs
 
-const val BASE_URL = "https://opentdb.com/"
 const val SECOND_IN_NANO = 1000000000
+const val DIFFICULTY = 3
+const val ACCELERATION_TEST = 10
 
 const val BOP = "bop it!"
 const val TWIST = "twist it!"
@@ -51,20 +49,20 @@ val GESTURES_IMAGES: Map<String, Int> = mapOf(
 class SecondFragment : Fragment(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
+    private lateinit var currentWait: Job
 
+    // helper variables for game logic
     private var score: Int = 0
     private var initialTimeStamp: Double = 0.0
-    private  var currentGesture: String = ""
+    private var currentGesture: String = ""
+    private var sensorIsLive = false
 
+    // helper variables for specific gestures
     private var questionAnswer = false
     private var didAnswerQuestion = false
-    private var hideEventCalled = false
     private var noMovement = true
 
     private var _binding: FragmentSecondBinding? = null
-
-    // This property is only valid between onCreateView and
-    // onDestroyView.
     private val binding get() = _binding!!
 
     override fun onCreateView(
@@ -74,8 +72,11 @@ class SecondFragment : Fragment(), SensorEventListener {
 
         _binding = FragmentSecondBinding.inflate(inflater, container, false)
 
+        // trivia button behavior
         binding.trueButton.setOnClickListener { checkAnswer(true) }
+        binding.trueButton.isClickable = false
         binding.falseButton.setOnClickListener { checkAnswer(false) }
+        binding.falseButton.isClickable = false
 
         return binding.root
 
@@ -90,7 +91,7 @@ class SecondFragment : Fragment(), SensorEventListener {
             }
 
             override fun onFinish() {
-                startGame()
+                getNextGesture()
             }
         }.start()
     }
@@ -101,13 +102,58 @@ class SecondFragment : Fragment(), SensorEventListener {
         _binding = null
     }
 
-    private fun startGame() {
+    /* Functions below for game setup, gesture logic, and game end */
+
+    private fun getNextGesture() {
+        resetGameView()
+
+        var newGesture = GESTURES_IMAGES.keys.random()
+        if (score != 0 && score % 5 == 0) {
+            newGesture = TRIVIA
+            showTrivia()
+        } else {
+            while (newGesture == currentGesture) {
+                newGesture = GESTURES_IMAGES.keys.random()
+            }
+            if (newGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
+            binding.gestureImage.setImageResource(GESTURES_IMAGES[newGesture]!!)
+        }
+        binding.gestureText.text = newGesture
+
+        currentGesture = newGesture
+        if (sensorIsLive) stopGestureSensor()
+        if (currentGesture != TRIVIA) startGestureSensor()
+    }
+
+    // Return the game view to the basic state following the initial countdown
+    private fun resetGameView() {
+        // Reset helper variables
+        initialTimeStamp = 0.0
+        questionAnswer = false
+        didAnswerQuestion = false
+        noMovement = true
+
+        // Show gesture image and name; Set original color
         binding.countdownText.visibility = View.INVISIBLE
         binding.gestureText.visibility = View.VISIBLE
+        binding.gestureText.setTextColor(Color.parseColor("#FCFF64"))
         binding.gestureImage.visibility = View.VISIBLE
 
-        getNextGesture()
-        if (currentGesture != TRIVIA) startGestureSensor()
+        // Hide and disable all trivia gesture views
+        binding.questionText.visibility = View.INVISIBLE
+        binding.trueButton.visibility = View.INVISIBLE
+        binding.falseButton.visibility = View.INVISIBLE
+        binding.trueButton.isClickable = false
+        binding.falseButton.isClickable = false
+
+        // Reorient gesture image
+        binding.gestureImage.apply {
+            rotationX = 0.0F
+            rotationY = 0.0F
+            rotation = 0.0F
+            translationX = 0.0F
+            translationY = 0.0F
+        }
     }
 
     private fun startGestureSensor() {
@@ -116,86 +162,23 @@ class SecondFragment : Fragment(), SensorEventListener {
             else -> Sensor.TYPE_ACCELEROMETER
         }
 
-        if (sensorType != Sensor.TYPE_SIGNIFICANT_MOTION) {
-            sensorManager = activity?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-            sensorManager.getDefaultSensor(sensorType)?.also {
-                sensorManager.registerListener(
-                    this,
-                    it,
-                    SensorManager.SENSOR_DELAY_FASTEST,
-                    SensorManager.SENSOR_DELAY_FASTEST
-                )
-            }
+        sensorManager = activity?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        sensorManager.getDefaultSensor(sensorType)?.also {
+            sensorManager.registerListener(
+                this,
+                it,
+                SensorManager.SENSOR_DELAY_FASTEST,
+                SensorManager.SENSOR_DELAY_FASTEST
+            )
         }
+
+        sensorIsLive = true
 
         if (sensorType == Sensor.TYPE_PROXIMITY) {
-            GlobalScope.launch(Dispatchers.Main) {
+            currentWait = GlobalScope.launch(Dispatchers.Main) {
                 delay(3000)
-                if (!hideEventCalled) gameOver()
+                gameOver()
             }
-        }
-    }
-
-    private fun stopGestureSensor() {
-        sensorManager.unregisterListener(this)
-    }
-
-    private fun getNextGesture() {
-        var newGesture = GESTURES_IMAGES.keys.random()
-        if (score != 0 && score % 5 == 0) {
-            newGesture = TRIVIA
-            askTrivia()
-        } else {
-            while (newGesture == currentGesture) {
-                newGesture = GESTURES_IMAGES.keys.random()
-            }
-            if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
-            binding.gestureImage.setImageResource(GESTURES_IMAGES[newGesture]!!)
-        }
-        currentGesture = newGesture
-        binding.gestureText.text = newGesture
-    }
-
-    private fun askTrivia() {
-        binding.gestureImage.visibility = View.INVISIBLE
-        binding.gestureText.setTextColor(Color.parseColor("#FFB864"))
-
-        loadTrivia()
-
-        binding.trueButton.visibility = View.VISIBLE
-        binding.falseButton.visibility = View.VISIBLE
-        binding.questionText.visibility = View.VISIBLE
-    }
-
-    private fun loadTrivia() {
-        //initiate the service
-        val destinationService  = ServiceBuilder.buildService(TriviaService::class.java)
-        val requestCall = destinationService.getQuestions()
-        //make network call asynchronously
-        requestCall.enqueue(object : Callback<MyTrivia?> {
-            override fun onResponse(call: Call<MyTrivia?>, response: Response<MyTrivia?>) {
-                val triviaQuestion = response.body()!!.results[0]
-                binding.questionText.text = triviaQuestion.question.toString()
-                questionAnswer = triviaQuestion.correct_answer.toBoolean()
-
-                GlobalScope.launch(Dispatchers.Main) {
-                    delay(10000)
-                    if (!didAnswerQuestion) gameOver()
-                }
-            }
-
-            override fun onFailure(call: Call<MyTrivia?>, t: Throwable) {
-                Log.d("Response", "Failure : ${t}")
-            }
-        })
-    }
-
-    private fun checkAnswer(answerSelected: Boolean) {
-        didAnswerQuestion = true
-        if (questionAnswer == answerSelected) {
-            onSuccessfulGesture()
-        } else {
-            gameOver()
         }
     }
 
@@ -216,19 +199,21 @@ class SecondFragment : Fragment(), SensorEventListener {
     private fun checkProximityGesture(event: SensorEvent) {
         val isHidden = event.values[0] < 3
         if (isHidden) {
-            hideEventCalled = true
+            currentWait.cancel()
             onSuccessfulGesture()
         }
     }
 
     private fun checkAccelerometerGesture(event: SensorEvent, elapsedTime: Double) {
-        if (elapsedTime > 3 && (currentGesture != FREEZE) || (currentGesture == FREEZE && !noMovement)) {
+        if (elapsedTime > DIFFICULTY && (currentGesture != FREEZE) ||
+            (currentGesture == FREEZE && !noMovement)) {
             gameOver()
         }
 
         val sides: Float = event.values[0]
         val upDown: Float = event.values[1]
 
+        // Allow for gesture image rotation based on sensor values
         binding.gestureImage.apply {
             rotationX = upDown * 3f
             rotationY = sides * 3f
@@ -239,47 +224,83 @@ class SecondFragment : Fragment(), SensorEventListener {
 
         if (abs(sides) > 5 && abs(upDown) > 5) { noMovement = false }
 
-        val wasPulled = currentGesture == PULL && upDown > 10
-        val wasTwisted = currentGesture == TWIST && (abs(sides) > 10)
-        val wasBopped = currentGesture == BOP && upDown < -10
-        val wasFroze = currentGesture == FREEZE && elapsedTime > 3 && noMovement
+        val wasPulled = currentGesture == PULL && upDown > ACCELERATION_TEST
+        val wasTwisted = currentGesture == TWIST && (abs(sides) > ACCELERATION_TEST)
+        val wasBopped = currentGesture == BOP && upDown < -ACCELERATION_TEST
+        val wasFroze = currentGesture == FREEZE && elapsedTime > DIFFICULTY && noMovement
 
         if (wasPulled || wasTwisted || wasBopped || wasFroze) onSuccessfulGesture()
     }
 
     private fun onSuccessfulGesture() {
-        stopGestureSensor()
-
-        // Reset visuals and update score
-        binding.gestureImage.apply {
-            rotationX = 0.0F
-            rotationY = 0.0F
-            rotation = 0.0F
-            translationX = 0.0F
-            translationY = 0.0F
-        }
-        noMovement = true
-        binding.gestureText.setTextColor(Color.parseColor("#59FF74"))
+        binding.gestureText.setTextColor(Color.parseColor("#64FF8F"))
+        if (sensorIsLive) stopGestureSensor()
         score += 1
 
-        object : CountDownTimer(2000, 1000) {
+        object : CountDownTimer(1000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 return
             }
 
             override fun onFinish() {
-                initialTimeStamp = 0.0
-                binding.gestureText.setTextColor(Color.parseColor("#FCFF64"))
                 getNextGesture()
-                startGestureSensor()
             }
         }.start()
     }
 
+    private fun showTrivia() {
+        binding.gestureImage.visibility = View.INVISIBLE
+        binding.gestureText.setTextColor(Color.parseColor("#FFB864"))
+
+        loadTrivia()
+
+        binding.trueButton.visibility = View.VISIBLE
+        binding.trueButton.isClickable = true
+        binding.falseButton.visibility = View.VISIBLE
+        binding.falseButton.isClickable = true
+        binding.questionText.visibility = View.VISIBLE
+    }
+
+    private fun loadTrivia() {
+        val destinationService  = ServiceBuilder.buildService(TriviaService::class.java)
+        val requestCall = destinationService.getQuestions()
+
+        requestCall.enqueue(object : Callback<MyTrivia?> {
+            override fun onResponse(call: Call<MyTrivia?>, response: Response<MyTrivia?>) {
+                val triviaQuestion = response.body()!!.results[0]
+                binding.questionText.text = triviaQuestion.question
+                questionAnswer = triviaQuestion.correct_answer.toBoolean()
+
+                currentWait = GlobalScope.launch(Dispatchers.Main) {
+                    delay(10000)
+                    gameOver()
+                }
+            }
+
+            override fun onFailure(call: Call<MyTrivia?>, t: Throwable) {
+                Log.d("Response", "Failure : ${t}")
+            }
+        })
+    }
+
+    private fun checkAnswer(answerSelected: Boolean) {
+        didAnswerQuestion = true
+        binding.trueButton.isClickable = false
+        binding.falseButton.isClickable = false
+        currentWait.cancel()
+
+        if (questionAnswer == answerSelected) {
+            onSuccessfulGesture()
+        } else {
+            gameOver()
+        }
+    }
+
     private fun gameOver() {
         binding.gestureText.setTextColor(Color.parseColor("#EB3743"))
-        stopGestureSensor()
-        object : CountDownTimer(1000, 1000) {
+        if (sensorIsLive) stopGestureSensor()
+
+        object : CountDownTimer(1500, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 return
             }
@@ -290,6 +311,8 @@ class SecondFragment : Fragment(), SensorEventListener {
             }
         }.start()
     }
+
+    private fun stopGestureSensor() { sensorManager.unregisterListener(this) }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         return
