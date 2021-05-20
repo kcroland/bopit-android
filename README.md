@@ -1,6 +1,7 @@
 # Bop It Android
 > 'Bop It Android' is a mobile version of Bop It (with some extra features) created in Android Studio.
-The tutorial has not been implemented at this time, so please read below for the gestures to use for each image
+The tutorial has not been implemented at this time, so please read below for the gestures to use for each image.
+Trivia for the trivia level is fetched from the [Open Trivia Database API](https://opentdb.com/api_config.php)!
 
 ![bop it app screens](screen.PNG)
 
