@@ -8,18 +8,26 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.bopitandroid.databinding.FragmentSecondBinding
+import com.example.bopitandroid.network.MyTrivia
+import com.example.bopitandroid.network.ServiceBuilder
+import com.example.bopitandroid.network.TriviaService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 import kotlin.math.abs
 
+const val BASE_URL = "https://opentdb.com/"
 const val SECOND_IN_NANO = 1000000000
 
 const val BOP = "bop it!"
@@ -27,6 +35,7 @@ const val TWIST = "twist it!"
 const val PULL = "pull it!"
 const val FREEZE = "FREEZE!"
 const val HIDE = "hide it!"
+const val TRIVIA = "TRIVIA!"
 
 val GESTURES_IMAGES: Map<String, Int> = mapOf(
     BOP to R.drawable.bop_arrow,
@@ -47,6 +56,8 @@ class SecondFragment : Fragment(), SensorEventListener {
     private var initialTimeStamp: Double = 0.0
     private  var currentGesture: String = ""
 
+    private var questionAnswer = false
+    private var didAnswerQuestion = false
     private var hideEventCalled = false
     private var noMovement = true
 
@@ -62,6 +73,10 @@ class SecondFragment : Fragment(), SensorEventListener {
     ): View? {
 
         _binding = FragmentSecondBinding.inflate(inflater, container, false)
+
+        binding.trueButton.setOnClickListener { checkAnswer(true) }
+        binding.falseButton.setOnClickListener { checkAnswer(false) }
+
         return binding.root
 
     }
@@ -88,10 +103,11 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun startGame() {
         binding.countdownText.visibility = View.INVISIBLE
-        getNextGesture()
         binding.gestureText.visibility = View.VISIBLE
         binding.gestureImage.visibility = View.VISIBLE
-        startGestureSensor()
+
+        getNextGesture()
+        if (currentGesture != TRIVIA) startGestureSensor()
     }
 
     private fun startGestureSensor() {
@@ -126,16 +142,61 @@ class SecondFragment : Fragment(), SensorEventListener {
 
     private fun getNextGesture() {
         var newGesture = GESTURES_IMAGES.keys.random()
-        while (newGesture == currentGesture) {
-            newGesture = GESTURES_IMAGES.keys.random()
+        if (score != 0 && score % 5 == 0) {
+            newGesture = TRIVIA
+            askTrivia()
+        } else {
+            while (newGesture == currentGesture) {
+                newGesture = GESTURES_IMAGES.keys.random()
+            }
+            if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
+            binding.gestureImage.setImageResource(GESTURES_IMAGES[newGesture]!!)
         }
-        newGesture = PULL
         currentGesture = newGesture
-        // TODO: 5/19/2021 return to newGesture
-
         binding.gestureText.text = newGesture
-        if (currentGesture == FREEZE) binding.gestureText.setTextColor(Color.parseColor("#00C2FF"))
-        binding.gestureImage.setImageResource(GESTURES_IMAGES[newGesture]!!)
+    }
+
+    private fun askTrivia() {
+        binding.gestureImage.visibility = View.INVISIBLE
+        binding.gestureText.setTextColor(Color.parseColor("#FFB864"))
+
+        loadTrivia()
+
+        binding.trueButton.visibility = View.VISIBLE
+        binding.falseButton.visibility = View.VISIBLE
+        binding.questionText.visibility = View.VISIBLE
+    }
+
+    private fun loadTrivia() {
+        //initiate the service
+        val destinationService  = ServiceBuilder.buildService(TriviaService::class.java)
+        val requestCall = destinationService.getQuestions()
+        //make network call asynchronously
+        requestCall.enqueue(object : Callback<MyTrivia?> {
+            override fun onResponse(call: Call<MyTrivia?>, response: Response<MyTrivia?>) {
+                val triviaQuestion = response.body()!!.results[0]
+                binding.questionText.text = triviaQuestion.question.toString()
+                questionAnswer = triviaQuestion.correct_answer.toBoolean()
+
+                GlobalScope.launch(Dispatchers.Main) {
+                    delay(10000)
+                    if (!didAnswerQuestion) gameOver()
+                }
+            }
+
+            override fun onFailure(call: Call<MyTrivia?>, t: Throwable) {
+                Log.d("Response", "Failure : ${t}")
+            }
+        })
+    }
+
+    private fun checkAnswer(answerSelected: Boolean) {
+        didAnswerQuestion = true
+        if (questionAnswer == answerSelected) {
+            onSuccessfulGesture()
+        } else {
+            gameOver()
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
