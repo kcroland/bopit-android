@@ -2,6 +2,8 @@
 > 'Bop It Android' is a mobile version of Bop It (with some extra features) created in Android Studio.
 The tutorial has not been implemented at this time, so please read below for the gestures to use for each image
 
+![bop it app screens](screen.PNG)
+
 ## How To Play
 ## ![bopping arrow](app/src/main/res/drawable/bop_arrow.png) **bop it!**
 Hold the device out in front of you (screen up and facing you) and slap down like you were trying
